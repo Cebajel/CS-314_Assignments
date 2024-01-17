@@ -1,2 +1,2 @@
-# CS-314O_Assignments
+# CS-314_Assignments
 Operating Systems Laboratory Assignments!
