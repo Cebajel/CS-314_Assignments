@@ -1,3 +1,7 @@
+//Author: Cebajel Tanan (210010055)
+//Title: CS 314 Assignment 2 - Part 2
+//Date: January 17th, 2024
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
