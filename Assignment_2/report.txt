@@ -1,0 +1,12 @@
+Author: Cebajel Tanan - 210010055
+Title: CS 314 Assignment 2 Report
+Date: January 17th, 2024
+
+Part 1:
+Submitted code is 21 lines long excluding comments and blank lines.
+
+Part 3:
+Processes are created in parallel with all the current processes. Once a process is completed,
+it exits the system. Output is in agreement with aforementioned points.
+If we execute part 1 code after rebuilding and rebooting system in part 3, we can see that 
+the output of part 1 and output of part 3 are in sync!
