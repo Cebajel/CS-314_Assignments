@@ -9,7 +9,7 @@ FILE ?= ./test_cases/process1.dat
 
 all: build run
 
-build: Scheduler.cpp Main.cpp Scheduler.h Process.h
+build: src/Scheduler.cpp src/Main.cpp src/Scheduler.h src/Process.h
 	$(CC) $(CFLAGS) -c src/Scheduler.cpp -o build/scheduler.o
 	$(CC) $(CFLAGS) -c src/Main.cpp -o build/main.o
 	$(CC) $(CFLAGS) build/scheduler.o build/main.o -o $(TARGET)
