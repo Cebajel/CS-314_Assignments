@@ -9,22 +9,25 @@ using namespace std;
 typedef struct arg_struct
 {
     int ***original_image;
-    int ***modified_image_1;
-    int ***modified_image_2;
+    volatile int ***modified_image_1;
+    volatile int ***modified_image_2;
     int rows;
     int cols;
-    bool done;
 } ARGS;
 
 void get_rows_cols(ifstream &input_image, string &buffer, int &rows, int &cols);
-int ***generate_image(int rows, int cols);
+volatile int ***generate_image(int rows, int cols);
 int ***read_image(int rows, int cols, ifstream &input_image, string &buffer);
 void *grayscale_transformation(void *arguments);
 void *flipping_transformation(void *arguments);
-void write_image(int ***image, ofstream &output_image, int rows, int cols);
-void delete_image(int ***image, int rows, int cols);
+void write_image(volatile int ***image, ofstream &output_image, int rows, int cols);
+void delete_image(volatile int ***image, int rows, int cols);
+void delete_image_non_volatile(int ***image, int rows, int cols);
+void initialize_lock(int rows, int cols);
+void clear_lock(int rows, int cols);
 
-atomic_flag my_lock = ATOMIC_FLAG_INIT;
+//  = ATOMIC_FLAG_INIT
+atomic_flag **my_lock;
 
 int main(int argc, char *argv[])
 {
@@ -58,18 +61,18 @@ int main(int argc, char *argv[])
 
     // Fetching number of rows and columns
     get_rows_cols(input_image, buffer, rows, cols);
+    initialize_lock(rows, cols);
     // Converting ppm image to an 3D array
     int ***image = read_image(rows, cols, input_image, buffer);
     // Creating two 2D array representing two independent graypoint images
-    int ***modified_image_1 = generate_image(rows, cols);
-    int ***modified_image_2 = generate_image(rows, cols);
+    volatile int ***modified_image_1 = generate_image(rows, cols);
+    volatile int ***modified_image_2 = generate_image(rows, cols);
 
     args.original_image = image;
     args.modified_image_1 = modified_image_1;
     args.modified_image_2 = modified_image_2;
     args.rows = rows;
     args.cols = cols;
-    args.done = false;
 
     pthread_create(&t1, NULL, &grayscale_transformation, (void *)&args);
     pthread_create(&t2, NULL, &flipping_transformation, (void *)&args);
@@ -81,14 +84,14 @@ int main(int argc, char *argv[])
     write_image(modified_image_2, output_image, rows, cols);
 
     // Deallocating memory assigned to all the image matrices
-    delete_image(image, rows, cols);
+    delete_image_non_volatile(image, rows, cols);
     delete_image(modified_image_1, rows, cols);
     delete_image(modified_image_2, rows, cols);
 
     // Closing file decriptors
     input_image.close();
     output_image.close();
-    my_lock.clear();
+    clear_lock(rows, cols);
 
     return EXIT_SUCCESS;
 }
@@ -116,15 +119,15 @@ void get_rows_cols(ifstream &input_image, string &buffer, int &rows, int &cols)
     return;
 }
 
-int ***generate_image(int rows, int cols)
+volatile int ***generate_image(int rows, int cols)
 {
-    int ***image = new int **[rows];
+    volatile int ***image = new volatile int **[rows];
     for (int i = 0; i < rows; i++)
     {
-        image[i] = new int *[cols];
+        image[i] = new volatile int *[cols];
         for (int j = 0; j < cols; j++)
         {
-            image[i][j] = new int[3];
+            image[i][j] = new volatile int[3];
             for (int k = 0; k < 3; k++)
             {
                 image[i][j][k] = 0;
@@ -155,73 +158,44 @@ int ***read_image(int rows, int cols, ifstream &input_image, string &buffer)
 
 void *grayscale_transformation(void *arguments)
 {
-    while (atomic_flag_test_and_set(&my_lock))
-        ;
     ARGS *args = (ARGS *)arguments;
     int rows = args->rows;
     int cols = args->cols;
-    int ***modified_image;
-    int ***original_image;
-    if (args->done)
-    {
-        modified_image = args->modified_image_2;
-        original_image = args->modified_image_1;
-    }
-    else
-    {
-        modified_image = args->modified_image_1;
-        original_image = args->original_image;
-    }
     for (int i = 0; i < rows; i++)
     {
         for (int j = 0; j < cols; j++)
         {
             // NTSC (National Television Standards Committee) Formula
-            modified_image[i][j][0] = (int)(0.299 * original_image[i][j][0] + 0.587 * original_image[i][j][1] + 0.114 * original_image[i][j][2]);
-            modified_image[i][j][1] = modified_image[i][j][0];
-            modified_image[i][j][2] = modified_image[i][j][0];
+            args->modified_image_1[i][j][0] = (int)(0.299 * args->original_image[i][j][0] + 0.587 * args->original_image[i][j][1] + 0.114 * args->original_image[i][j][2]);
+            args->modified_image_1[i][j][1] = args->modified_image_1[i][j][0];
+            args->modified_image_1[i][j][2] = args->modified_image_1[i][j][0];
+            my_lock[i][j].clear();
         }
     }
-    args->done = true;
-    atomic_flag_clear(&my_lock);
     return NULL;
 }
 
 void *flipping_transformation(void *arguments)
 {
-    while (atomic_flag_test_and_set(&my_lock))
-        ;
     ARGS *args = (ARGS *)arguments;
     int rows = args->rows;
     int cols = args->cols;
-    int ***modified_image;
-    int ***original_image;
-    if (args->done)
-    {
-        modified_image = args->modified_image_2;
-        original_image = args->modified_image_1;
-    }
-    else
-    {
-        modified_image = args->modified_image_1;
-        original_image = args->original_image;
-    }
     for (int i = 0; i < rows; i++)
     {
         for (int j = 0; j < cols; j++)
         {
+            while (my_lock[i][j].test_and_set());
             for (int k = 0; k < 3; k++)
             {
-                modified_image[i][j][k] = original_image[i][cols - j - 1][k];
+                args->modified_image_2[i][cols-j-1][k] = args->modified_image_1[i][j][k];
             }
+            my_lock[i][j].clear();
         }
     }
-    args->done = true;
-    atomic_flag_clear(&my_lock);
     return NULL;
 };
 
-void write_image(int ***image, ofstream &output_image, int rows, int cols)
+void write_image(volatile int ***image, ofstream &output_image, int rows, int cols)
 {
     output_image << "P3\n";
     output_image << cols << " " << rows << "\n";
@@ -238,7 +212,48 @@ void write_image(int ***image, ofstream &output_image, int rows, int cols)
     return;
 }
 
-void delete_image(int ***image, int rows, int cols)
+void delete_image(volatile int ***image, int rows, int cols)
+{
+    for (int i = 0; i < rows; i++)
+    {
+        for (int j = 0; j < cols; j++)
+        {
+            delete[] image[i][j];
+        }
+        delete[] image[i];
+    }
+    delete[] image;
+    return;
+}
+
+void initialize_lock(int rows, int cols)
+{
+    my_lock = new atomic_flag *[rows];
+    for (int i = 0; i < rows; i++)
+    {
+        my_lock[i] = new atomic_flag[cols];
+        for (int j = 0; j < cols; j++)
+        {
+            my_lock[i][j].clear();
+            while(my_lock[i][j].test_and_set());
+        }
+    }
+    return;
+}
+
+void clear_lock(int rows, int cols)
+{
+    for (int i = 0; i < rows; i++)
+    {
+        for (int j = 0; j < cols; j++)
+        {
+            my_lock[i][j].clear();
+        }
+    }
+    return;
+}
+
+void delete_image_non_volatile(int ***image, int rows, int cols)
 {
     for (int i = 0; i < rows; i++)
     {

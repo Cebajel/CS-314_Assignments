@@ -3,31 +3,76 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include <semaphore.h>
+#include <fcntl.h>
+#include <errno.h>
 
 using namespace std;
 
 typedef struct arg_struct
 {
     int ***original_image;
-    int ***modified_image_1;
-    int ***modified_image_2;
+    volatile int ***modified_image_1;
+    volatile int ***modified_image_2;
     int rows;
     int cols;
-    bool done;
 } ARGS;
 
 void get_rows_cols(ifstream &input_image, string &buffer, int &rows, int &cols);
-int ***generate_image(int rows, int cols);
+volatile int ***generate_image(int rows, int cols);
 int ***read_image(int rows, int cols, ifstream &input_image, string &buffer);
 void *grayscale_transformation(void *arguments);
 void *flipping_transformation(void *arguments);
-void write_image(int ***image, ofstream &output_image, int rows, int cols);
-void delete_image(int ***image, int rows, int cols);
+void write_image(volatile int ***image, ofstream &output_image, int rows, int cols);
+void delete_image(volatile int ***image, int rows, int cols);
+void delete_image_non_volatile(int ***image, int rows, int cols);
 
-sem_t *s = sem_open("/semaphore", O_CREAT, 0666, 1);
+sem_t *s;
 
 int main(int argc, char *argv[])
 {
+    s = sem_open("/my_sem", O_CREAT | O_EXCL, 0666, 0);
+    errno = 0;
+    sem_unlink("/my_sem");
+
+    if (s == SEM_FAILED)
+    {
+        cout << "Sem_open failed\n";
+        switch (errno)
+        {
+        case EACCES:
+            cout << "EACCES\n";
+            break;
+        case EEXIST:
+            cout << "EEXIST\n";
+            break;
+        case EINTR:
+            cout << "EINTR\n";
+            break;
+        case EINVAL:
+            cout << "EINVAL\n";
+            break;
+        case EMFILE:
+            cout << "EMFILE\n";
+            break;
+        case ENAMETOOLONG:
+            cout << "ENAMETOOLONG\n";
+            break;
+        case ENFILE:
+            cout << "ENFILE\n";
+            break;
+        case ENOENT:
+            cout << "ENOENT\n";
+            break;
+        case ENOSPC:
+            cout << "ENOSPC\n";
+            break;
+        default:
+            cout << "Nothing\n";
+            break;
+        }
+        exit(EXIT_FAILURE);
+    }
+
     if (argc != 3)
     {
         // Correct number of arguments are not passed
@@ -60,16 +105,15 @@ int main(int argc, char *argv[])
     get_rows_cols(input_image, buffer, rows, cols);
     // Converting ppm image to an 3D array
     int ***image = read_image(rows, cols, input_image, buffer);
-    // Creating two 2D array representing two independent graypoint images
-    int ***modified_image_1 = generate_image(rows, cols);
-    int ***modified_image_2 = generate_image(rows, cols);
+    // Creating two 3D array representing two independent graypoint images
+    volatile int ***modified_image_1 = generate_image(rows, cols);
+    volatile int ***modified_image_2 = generate_image(rows, cols);
 
     args.original_image = image;
     args.modified_image_1 = modified_image_1;
     args.modified_image_2 = modified_image_2;
     args.rows = rows;
     args.cols = cols;
-    args.done = false;
 
     pthread_create(&t1, NULL, &grayscale_transformation, (void *)&args);
     pthread_create(&t2, NULL, &flipping_transformation, (void *)&args);
@@ -81,11 +125,10 @@ int main(int argc, char *argv[])
     write_image(modified_image_2, output_image, rows, cols);
 
     // Deallocating memory assigned to all the image matrices
-    delete_image(image, rows, cols);
+    delete_image_non_volatile(image, rows, cols);
     delete_image(modified_image_1, rows, cols);
     delete_image(modified_image_2, rows, cols);
     sem_close(s);
-    sem_unlink("/semaphore");
 
     // Closing file decriptors
     input_image.close();
@@ -117,15 +160,15 @@ void get_rows_cols(ifstream &input_image, string &buffer, int &rows, int &cols)
     return;
 }
 
-int ***generate_image(int rows, int cols)
+volatile int ***generate_image(int rows, int cols)
 {
-    int ***image = new int **[rows];
+    volatile int ***image = new volatile int **[rows];
     for (int i = 0; i < rows; i++)
     {
-        image[i] = new int *[cols];
+        image[i] = new volatile int *[cols];
         for (int j = 0; j < cols; j++)
         {
-            image[i][j] = new int[3];
+            image[i][j] = new volatile int[3];
             for (int k = 0; k < 3; k++)
             {
                 image[i][j][k] = 0;
@@ -156,71 +199,67 @@ int ***read_image(int rows, int cols, ifstream &input_image, string &buffer)
 
 void *grayscale_transformation(void *arguments)
 {
-    sem_wait(s);
     ARGS *args = (ARGS *)arguments;
     int rows = args->rows;
     int cols = args->cols;
-    int ***modified_image;
-    int ***original_image;
-    if (args->done)
-    {
-        modified_image = args->modified_image_2;
-        original_image = args->modified_image_1;
-    }
-    else
-    {
-        modified_image = args->modified_image_1;
-        original_image = args->original_image;
-    }
     for (int i = 0; i < rows; i++)
     {
         for (int j = 0; j < cols; j++)
         {
             // NTSC (National Television Standards Committee) Formula
-            modified_image[i][j][0] = (int)(0.299 * original_image[i][j][0] + 0.587 * original_image[i][j][1] + 0.114 * original_image[i][j][2]);
-            modified_image[i][j][1] = modified_image[i][j][0];
-            modified_image[i][j][2] = modified_image[i][j][0];
+            args->modified_image_1[i][j][0] = (int)(0.299 * args->original_image[i][j][0] + 0.587 * args->original_image[i][j][1] + 0.114 * args->original_image[i][j][2]);
+            args->modified_image_1[i][j][1] = args->modified_image_1[i][j][0];
+            args->modified_image_1[i][j][2] = args->modified_image_1[i][j][0];
+            sem_post(s);
         }
     }
-    args->done = true;
-    sem_post(s);
     return NULL;
 }
 
 void *flipping_transformation(void *arguments)
 {
-    sem_wait(s);
     ARGS *args = (ARGS *)arguments;
     int rows = args->rows;
     int cols = args->cols;
-    int ***modified_image;
-    int ***original_image;
-    if (args->done)
-    {
-        modified_image = args->modified_image_2;
-        original_image = args->modified_image_1;
-    }
-    else
-    {
-        modified_image = args->modified_image_1;
-        original_image = args->original_image;
-    }
+    // #pragma omp parallel for
     for (int i = 0; i < rows; i++)
     {
+        // #pragma omp parallel for
         for (int j = 0; j < cols; j++)
         {
+            errno = 0;
+            if (sem_wait(s) == -1)
+            {
+                switch (errno)
+                {
+                case EAGAIN:
+                    cout << "EAGAIN\n";
+                    break;
+                case EDEADLK:
+                    cout << "EDEADLK\n";
+                    break;
+                case EINTR:
+                    cout << "EINTR\n";
+                    break;
+                case EINVAL:
+                    cout << "EINVAL\n";
+                    break;
+                default:
+                    break;
+                }
+                exit(EXIT_FAILURE);
+            }
+
             for (int k = 0; k < 3; k++)
             {
-                modified_image[i][j][k] = original_image[i][cols - j - 1][k];
+                args->modified_image_2[i][cols - j - 1][k] = args->modified_image_1[i][j][k];
             }
         }
     }
-    args->done = true;
-    sem_post(s);
     return NULL;
 };
 
-void write_image(int ***image, ofstream &output_image, int rows, int cols)
+void write_image(volatile int ***image, ofstream &output_image, int rows, int cols)
 {
     output_image << "P3\n";
     output_image << cols << " " << rows << "\n";
@@ -237,7 +276,21 @@ void write_image(int ***image, ofstream &output_image, int rows, int cols)
     return;
 }
 
-void delete_image(int ***image, int rows, int cols)
+void delete_image(volatile int ***image, int rows, int cols)
+{
+    for (int i = 0; i < rows; i++)
+    {
+        for (int j = 0; j < cols; j++)
+        {
+            delete[] image[i][j];
+        }
+        delete[] image[i];
+    }
+    delete[] image;
+    return;
+}
+
+void delete_image_non_volatile(int ***image, int rows, int cols)
 {
     for (int i = 0; i < rows; i++)
     {
