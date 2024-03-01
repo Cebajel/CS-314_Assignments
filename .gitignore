@@ -2,5 +2,5 @@
 /output/*
 .DS_Store
 __MACOSX
-*.zip
-sample_pp3_73mb.ppm
+/*/*.zip
+/*/sample_pp3_73mb.ppm
