@@ -14,12 +14,13 @@ def plot(vSize=60, testcase="req1.dat"):
 	for method in policies:
 		x = np.arange(1, vSize + 1, 1)
 		pageFaults = []
+		# frames in range of [1, vSize]
 		for i in x:
 			pf = getPageFaults(method=method, pSize=i, vSize=vSize, testcase=testcase)
 			pageFaults.append(pf)
 		plt.plot(x, pageFaults, label=method)
 
-	plt.title(testcase)
+	plt.title(f"File: {testcase} \n # of logical pages: {vSize}") 
 	plt.ylabel("Number of page faults")
 	plt.xlabel("Number of Frames")
 	plt.legend()
@@ -32,7 +33,7 @@ def main():
 	plot(60, "req2.dat")
 	plot(30, "req3.dat")
 	plot(100, "req4.dat")
-	plot(50, "req5.dat")
+	plot(100, "req5.dat")
 
 if __name__ == "__main__":
 	main()
