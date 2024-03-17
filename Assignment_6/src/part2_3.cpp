@@ -58,15 +58,15 @@ int main(int argc, char *argv[])
 
     if (pid == 0)
     {
-        // Parent Process
-        close(pipefd[1]);
+        // Child Process
+        close(pipefd[1]); //close the write of child
         flipping_transformation(modified_image, pipefd[0], rows, cols);
         close(pipefd[0]);
     }
     else
     {
-        // Child Process
-        close(pipefd[0]);
+        // Parent Process
+        close(pipefd[0]); // close the read of parent
         grayscale_transformation(image, pipefd[1], rows, cols);
         close(pipefd[1]);
         delete_image(image, rows, cols);

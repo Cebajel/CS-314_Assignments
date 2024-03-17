@@ -52,6 +52,7 @@ int main(int argc, char* argv[]) {
     unordered_map<int,bool> main_memory;
     queue<int> temp_queue;
     int max_alloted_frame = -1;
+    int pageFaults = 0;
 
     while(!request_file.eof()) {
         int requested_page;
@@ -74,12 +75,15 @@ int main(int argc, char* argv[]) {
         
         if (main_memory.find(page_table[requested_page]) == main_memory.end()) {
             cout << "Page Fault\n";
+            pageFaults++;
             handle_page_fault(main_memory, number_of_frames, requested_page, temp_queue, page_table);
         } else {
             cout << "Page found in the main memory\n";
         }
         cout << endl;
     }
+
+    cout << "Total number of page faults: " << pageFaults << "\n";
 
     return EXIT_SUCCESS;
 }

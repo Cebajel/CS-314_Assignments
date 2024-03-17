@@ -113,12 +113,12 @@ int main(int argc, char *argv[])
     int pid = fork();
     if (pid == 0)
     {
-        // Parent Process
+        // Child Process
         flipping_transformation(modified_image, shm, rows, cols);
     }
     else
     {
-        // Child Process
+        // Parent Process
         grayscale_transformation(image, shm, rows, cols);
         sem_close(s);
         delete_image(image, rows, cols);
@@ -223,7 +223,7 @@ void grayscale_transformation(int ***original_image, unsigned char *shm, int row
 
             write_shared_memory(str, temp);
             str++;
-            sem_post(s);
+            sem_post(s); //increments value
         }
     }
     return;
