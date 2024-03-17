@@ -4,13 +4,14 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 def getPageFaults(method="lru", pSize=20, vSize=60, sSize=60, testcase="req1.dat"):
-	# print(f"Running {method} with {vSize} number of logical pages, {pSize} number of physical frames and {sSize} number of swap blocks")
-	print(f"{method} {vSize} {pSize} {sSize}")
-	output = subprocess.Popen(["./" + method, str(vSize), str(pSize), str(sSize), "./testcases/" + testcase], stdout=subprocess.PIPE).communicate()[0]
-	print(output)
-	pageFaults = output.split()[-1]
-	return int(pageFaults)
-
+	try:
+		output = subprocess.Popen(["./" + method, str(vSize), str(pSize), str(sSize), "./testcases/" + testcase], stdout=subprocess.PIPE).communicate()[0]
+		pageFaults = output.split()[-1]
+		return int(pageFaults)
+	except Exception as e:
+		print(f"Error occurred in getPageFaults for method {method}, pSize {pSize}, vSize {vSize}, sSize {sSize}, testcase {testcase}: {e}")
+		return 0
+	
 def plot(vSize=60, testcase="req1.dat"):
 	policies = ["lru", "random", "fifo"]
 	for method in policies:
@@ -19,7 +20,10 @@ def plot(vSize=60, testcase="req1.dat"):
 		# frames in range of [1, vSize]
 		for i in x:
 			pf = getPageFaults(method=method, pSize=i, vSize=vSize, testcase=testcase)
-			pageFaults.append(pf)
+			if (pf == 0):
+				pageFaults.append(pageFaults[-1])
+			else:
+				pageFaults.append(pf)
 		plt.plot(x, pageFaults, label=method)
 
 	plt.title(f"File: {testcase} \n # of logical pages: {vSize}") 

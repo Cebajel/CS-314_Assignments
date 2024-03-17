@@ -6,7 +6,7 @@
 
 using namespace std;
 
-void handle_page_fault(unordered_map<int, bool> &main_memory, int number_of_frames, int requested_page, queue<int> &temp_queue, unordered_map<int, int> &page_table, int &number_of_frames_in_memory) {
+void handle_page_fault(unordered_map<int, bool>& main_memory, int number_of_frames, int requested_page, queue<int>& temp_queue, unordered_map<int, int>& page_table, int& number_of_frames_in_memory) {
     temp_queue.push(requested_page);
 
     if (number_of_frames_in_memory < number_of_frames) {
@@ -30,34 +30,32 @@ int main(int argc, char* argv[]) {
     }
 
     int number_of_pages, number_of_frames, number_of_blocks;
-    
-    try{
+
+    try {
         number_of_pages = atoi(argv[1]), number_of_frames = atoi(argv[2]), number_of_blocks = atoi(argv[3]);
         cout << "Number of pages: " << number_of_pages << endl;
         cout << "Number of frames in main memory: " << number_of_frames << endl;
         cout << "Number of blocks: " << number_of_blocks << endl << endl;
-    }
-    catch (exception e) {
+    } catch (exception e) {
         cout << " Syntax: ./a.out <Number of pages> <Number of Frames in Main Memory> <Number of Blocks> <Path to the file containing requests>\n";
         exit(EXIT_FAILURE);
     }
 
     ifstream request_file;
 
-    try{
+    try {
         request_file.open(argv[4]);
-    }
-    catch (exception e) {
+    } catch (exception e) {
         cout << e.what() << endl;
         exit(EXIT_FAILURE);
     }
 
-    unordered_map<int,int> page_table;
-    unordered_map<int,bool> main_memory;
+    unordered_map<int, int> page_table;
+    unordered_map<int, bool> main_memory;
     queue<int> temp_queue;
     int max_alloted_frame = 0, page_fault = 0, number_of_frames_in_memory = 0;
 
-    while(!request_file.eof()) {
+    while (!request_file.eof()) {
         int requested_page;
         request_file >> requested_page;
         cout << "Requested Page is: " << requested_page << endl;
@@ -75,7 +73,7 @@ int main(int argc, char* argv[]) {
             page_table[requested_page] = max_alloted_frame;
             cout << "New Frame Assigned\n";
         }
-        
+
         if (main_memory.find(page_table[requested_page]) != main_memory.end() && main_memory[page_table[requested_page]]) {
             cout << "Page found in the main memory\n";
         } else {
@@ -86,7 +84,7 @@ int main(int argc, char* argv[]) {
         cout << endl;
     }
 
-    cout << "Number of page faults: " << page_fault << "\n";
+    cout << page_fault << endl;
 
     return EXIT_SUCCESS;
 }
