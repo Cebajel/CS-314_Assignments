@@ -5,7 +5,9 @@ from matplotlib import pyplot as plt
 
 def getPageFaults(method="lru", pSize=20, vSize=60, sSize=60, testcase="req1.dat"):
 	# print(f"Running {method} with {vSize} number of logical pages, {pSize} number of physical frames and {sSize} number of swap blocks")
+	print(f"{method} {vSize} {pSize} {sSize}")
 	output = subprocess.Popen(["./" + method, str(vSize), str(pSize), str(sSize), "./testcases/" + testcase], stdout=subprocess.PIPE).communicate()[0]
+	print(output)
 	pageFaults = output.split()[-1]
 	return int(pageFaults)
 
